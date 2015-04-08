@@ -268,6 +268,10 @@ void sigchld_handler(int sig)
 //
 void sigint_handler(int sig) 
 {
+  pid_t fg = fgpid(jobs);
+  if(fg!=0){
+    kill(-fg, SIGINT);
+  }
   return;
 }
 
@@ -279,8 +283,12 @@ void sigint_handler(int sig)
 //
 void sigtstp_handler(int sig) 
 {
+  pid_t fg = fgpid(jobs);
+  if(fg!=0){
+    kill(-fg, SIGTSTP);
+  }
   return;
-}
+
 
 /*********************
  * End signal handlers
