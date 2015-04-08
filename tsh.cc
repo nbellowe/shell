@@ -1,4 +1,4 @@
-// 
+// gg
 // tsh - A tiny shell program with job control
 // 
 // <Put your name and login ID here>
@@ -156,7 +156,7 @@ void eval(char *cmdline)
   // use below to launch a process.
   //
   char *argv[MAXARGS];
-
+  pid_t pid;
   //
   // The 'bg' variable is TRUE if the job should run
   // in background mode or FALSE if it should run in FG
@@ -164,7 +164,24 @@ void eval(char *cmdline)
   int bg = parseline(cmdline, argv); 
   if (argv[0] == NULL)  
     return;   /* ignore empty lines */
+  if(!builtin_cmd(argv)){
+    if((pid=fork())<0){
+      printf("error forking");
+    }
+    if(pid ==0){
+      printf("this is the child");
+      if(execve(argv[0], argv, NULL) < 0){
+        printf("there was an error executing the program.");
+      }
+    }
+//if the first word is not a builtin command, it must be a program. 
+//We need to execute this program with execve(argv[0],argv,NULL)
+    if(!bg){
 
+    //if it is a foreground job. 
+    //wait until current job is done, then execute this job.
+    }
+  }
   return;
 }
 
@@ -173,13 +190,30 @@ void eval(char *cmdline)
 //
 // builtin_cmd - If the user has typed a built-in command then execute
 // it immediately. The command name would be in argv[0] and
-// is a C string. We've cast this to a C++ string type to simplify
+// is ia C string. We've cast this to a C++ string type to simplify
 // string comparisons; however, the do_bgfg routine will need 
 // to use the argv array as well to look for a job number.
 //
 int builtin_cmd(char **argv) 
 {
+  printf("built in cmd");
   string cmd(argv[0]);
+  if(!strcmp(argv[0], "quit")){
+    printf("reached");
+    exit(0);
+  }
+  if(!strcmp(argv[0], "jobs")){
+    listjobs(jobs);
+    return 1;
+  }
+  if(!strcmp(argv[0], "fg")){
+   do_bgfg(argv);
+   exit(1);
+  }
+  if(!strcmp(argv[0], "bg")){
+    do_bgfg(argv);
+    exit(1);
+  }
   return 0;     /* not a builtin command */
 }
 
@@ -289,7 +323,7 @@ void sigtstp_handler(int sig)
   }
   return;
 
-
+}
 /*********************
  * End signal handlers
  *********************/
