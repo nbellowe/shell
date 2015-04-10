@@ -169,7 +169,6 @@ void eval(char *cmdline)
       printf("error forking");
     }
     if(pid ==0){
-      printf("this is the child");
       if(execve(argv[0], argv, NULL) < 0){
         printf("there was an error executing the program.");
       }
@@ -196,7 +195,6 @@ void eval(char *cmdline)
 //
 int builtin_cmd(char **argv) 
 {
-  printf("built in cmd");
   string cmd(argv[0]);
   if(!strcmp(argv[0], "quit")){
     printf("reached");
