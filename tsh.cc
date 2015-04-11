@@ -1,7 +1,7 @@
 // gg
 // tsh - A tiny shell program with job control
-// 
-// <Put your name and login ID here>
+//
+// Nathan Bellowe 102343874 and Sarah Niemeyer 100027519
 //
 
 using namespace std;
@@ -20,7 +20,6 @@ using namespace std;
 #include "globals.h"
 #include "jobs.h"
 #include "helper-routines.h"
-
 //
 // Needed global variable definitions
 //
@@ -35,7 +34,7 @@ int verbose = 0;
 // The code below provides the "prototypes" for those functions
 // so that earlier code can refer to them. You need to fill in the
 // function bodies below.
-// 
+//
 
 void eval(char *cmdline);
 int builtin_cmd(char **argv);
@@ -47,9 +46,9 @@ void sigtstp_handler(int sig);
 void sigint_handler(int sig);
 
 //
-// main - The shell's main routine 
+// main - The shell's main routine
 //
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
   int emit_prompt = 1; // emit prompt (default)
 
@@ -91,7 +90,7 @@ int main(int argc, char **argv)
   //
   // This one provides a clean way to kill the shell
   //
-  Signal(SIGQUIT, sigquit_handler); 
+  Signal(SIGQUIT, sigquit_handler);
 
   //
   // Initialize the job list
@@ -129,15 +128,15 @@ int main(int argc, char **argv)
     eval(cmdline);
     fflush(stdout);
     fflush(stdout);
-  } 
+  }
 
   exit(0); //control never reaches here
 }
-  
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // eval - Evaluate the command line that the user has just typed in
-// 
+//
 // If the user has requested a built-in command (quit, jobs, bg or fg)
 // then execute it immediately. Otherwise, fork a child process and
 // run the job in the context of the child. If the job is running in
@@ -146,42 +145,50 @@ int main(int argc, char **argv)
 // background children don't receive SIGINT (SIGTSTP) from the kernel
 // when we type ctrl-c (ctrl-z) at the keyboard.
 //
-void eval(char *cmdline) 
+void eval(char *cmdline)
 {
-  /* Parse command line */
-  //
-  // The 'argv' vector is filled in by the parseline
-  // routine below. It provides the arguments needed
-  // for the execve() routine, which you'll need to
-  // use below to launch a process.
-  //
-  char *argv[MAXARGS];
-  pid_t pid;
-  //
-  // The 'bg' variable is TRUE if the job should run
-  // in background mode or FALSE if it should run in FG
-  //
-  int bg = parseline(cmdline, argv); 
-  if (argv[0] == NULL)  
-    return;   /* ignore empty lines */
-  if(!builtin_cmd(argv)){
-    if((pid=fork())<0){
-      printf("error forking");
-    }
-    if(pid ==0){
-      if(execve(argv[0], argv, NULL) < 0){
-        printf("there was an error executing the program.");
-      }
-    }
-//if the first word is not a builtin command, it must be a program. 
-//We need to execute this program with execve(argv[0],argv,NULL)
-    if(!bg){
+    /* Parse command line */
+    //
+    // The 'argv' vector is filled in by the parseline
+    // routine below. It provides the arguments needed
+    // for the execve() routine, which you'll need to
+    // use below to launch a process.
+    //
+    char *argv[MAXARGS];
+    pid_t pid;
+    //
+    // The 'bg' variable is TRUE if the job should run
+    // in background mode or FALSE if it should run in FG
+    //
+    int bg = parseline(cmdline, argv);
+    if (argv[0] == NULL)
+        return;   /* ignore empty lines */
 
-    //if it is a foreground job. 
-    //wait until current job is done, then execute this job.
+    sigset_t mask;
+    Sigemptyset(&mask);                     //mask sigchild signal until after
+    Sigaddset(&mask, SIGCHLD);              //job is added so as to not delete
+    Sigprocmask(SIG_BLOCK, &mask, NULL);    //a non-existant job
+
+    if(!builtin_cmd(argv)){ // Handle if the first arg is quit/fg/bg/jobs
+        //if the first word is not a builtin command, it must be a program.
+        if((pid=Fork()) == 0){ //Therefore, fork a child program.
+            //Note Fork() returns 0 and enters this block if it is the child.
+
+            setpgid(0,0); // assign to new pgid so Signals don't kill shell?
+            //Sarah I don't understand this pgif. Lets talk about it next time.
+
+            Execve(argv[0], argv, NULL);
+            return; //don't want child process becoming a shell! :)
+        }
+        addjob(jobs, pid, (bg ? BG : FG), cmdline); //Add to jobs with
+                                                    //  newjob.state == bg.
+        Sigprocmask(SIG_UNBLOCK, &mask, NULL); // now that job is added, unblock
+        if(!bg) //If its a foreground task
+        {
+            waitfg(pid); //Foreground tasks need to wait until they are finished.
+        }
     }
-  }
-  return;
+    return;
 }
 
 
@@ -190,45 +197,40 @@ void eval(char *cmdline)
 // builtin_cmd - If the user has typed a built-in command then execute
 // it immediately. The command name would be in argv[0] and
 // is ia C string. We've cast this to a C++ string type to simplify
-// string comparisons; however, the do_bgfg routine will need 
+// string comparisons; however, the do_bgfg routine will need
 // to use the argv array as well to look for a job number.
 //
-int builtin_cmd(char **argv) 
+int builtin_cmd(char **argv)
 {
-  string cmd(argv[0]);
-  if(!strcmp(argv[0], "quit")){
-    printf("reached");
-    exit(0);
-  }
-  if(!strcmp(argv[0], "jobs")){
-    listjobs(jobs);
-    return 1;
-  }
-  if(!strcmp(argv[0], "fg")){
-   do_bgfg(argv);
-   exit(1);
-  }
-  if(!strcmp(argv[0], "bg")){
-    do_bgfg(argv);
-    exit(1);
-  }
-  return 0;     /* not a builtin command */
+    if(!strcmp(argv[0], "quit")){ // if the input is 'quit'
+        sigchld_handler(0); //good idea to kill child processes.
+        exit(0); //exit shell
+    }
+    if(!strcmp(argv[0], "jobs")){ // if its jobs
+        listjobs(jobs); //list running jobs.
+        return 1;
+    }
+    if(!strcmp(argv[0], "fg") || !strcmp(argv[0], "bg")){ //if its 'fg' or 'bg'
+        do_bgfg(argv);
+        return 1;
+    }
+    return 0;     /* not a builtin command */
 }
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // do_bgfg - Execute the builtin bg and fg commands
 //
-void do_bgfg(char **argv) 
+void do_bgfg(char **argv)
 {
   struct job_t *jobp=NULL;
-    
+
   /* Ignore command if no argument */
   if (argv[1] == NULL) {
     printf("%s command requires PID or %%jobid argument\n", argv[0]);
     return;
   }
-    
+
   /* Parse the required PID or %JID arg */
   if (isdigit(argv[1][0])) {
     pid_t pid = atoi(argv[1]);
@@ -243,23 +245,24 @@ void do_bgfg(char **argv)
       printf("%s: No such job\n", argv[1]);
       return;
     }
-  }	    
+  }
   else {
     printf("%s: argument must be a PID or %%jobid\n", argv[0]);
     return;
   }
 
-  //
-  // You need to complete rest. At this point,
-  // the variable 'jobp' is the job pointer
-  // for the job ID specified as an argument.
-  //
-  // Your actions will depend on the specified command
-  // so we've converted argv[0] to a string (cmd) for
-  // your benefit.
-  //
-  string cmd(argv[0]);
+  //BEGIN OUR CODE
 
+  pid_t pid = jobp -> pid;
+  jobp -> state = !strcmp(argv[0], "fg") ? FG : BG; //assign the job its state.
+  if(jobp -> state == ST)//if the job has stopped we need to send a signal
+  {                      //to continue.
+      Kill(-pid, SIGCONT); //kill really sends signal to continue program
+  }
+  if(jobp -> state == FG) //if its a foreground job
+  {
+      waitpid(-pid, NULL, 0); //FG jobs are blocking, and we must wait to prompt
+  }
   return;
 }
 
@@ -269,8 +272,10 @@ void do_bgfg(char **argv)
 //
 void waitfg(pid_t pid)
 {
-  // get current job, sleep until it is not FG
-  return;
+    while(fgpid(jobs)==pid){   //spin while the inputted pid is still the fg pid
+      sleep(.1);   //blocking call to sleep.
+    }
+    return;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -285,47 +290,57 @@ void waitfg(pid_t pid)
 //     a child job terminates (becomes a zombie), or stops because it
 //     received a SIGSTOP or SIGTSTP signal. The handler reaps all
 //     available zombie children, but doesn't wait for any other
-//     currently running children to terminate.  
+//     currently running children to terminate.
 //
-void sigchld_handler(int sig) 
+void sigchld_handler(int sig)
 {
-  return;
+    pid_t pid;
+    int CODE;
+
+    while(1){
+    	pid = waitpid(-1, &CODE, WNOHANG|WUNTRACED); //get zombies --
+                                                     //don't hang & untraced
+        if(pid <= 0){ return; } //Base case: no more zombies
+        if ( WIFEXITED(CODE) || WIFSIGNALED(CODE)) { //remove terminated jobs.
+    		deletejob(jobs, pid);
+    	}else if( WIFSTOPPED(CODE) ){ //But if stopped, just change the state.
+    		getjobpid(jobs, pid) -> state = ST;
+    	}
+    }
+    return;
 }
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // sigint_handler - The kernel sends a SIGINT to the shell whenver the
 //    user types ctrl-c at the keyboard.  Catch it and send it along
-//    to the foreground job.  
+//    to the foreground job.
 //
-void sigint_handler(int sig) 
+void sigint_handler(int sig)
 {
-  pid_t fg = fgpid(jobs);
-  if(fg!=0){
-    kill(-fg, SIGINT);
-  }
-  return;
+    pid_t fg = fgpid(jobs); //pid for fg process.
+    if(fgpid(jobs)!=0){ //if there is one...
+        Kill(-fg, SIGINT); //kill it.
+    }
+    return;
 }
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // sigtstp_handler - The kernel sends a SIGTSTP to the shell whenever
 //     the user types ctrl-z at the keyboard. Catch it and suspend the
-//     foreground job by sending it a SIGTSTP.  
+//     foreground job by sending it a SIGTSTP.
 //
-void sigtstp_handler(int sig) 
+void sigtstp_handler(int sig)
 {
-  pid_t fg = fgpid(jobs);
-  if(fg!=0){
-    kill(-fg, SIGTSTP);
-  }
-  return;
+
+    pid_t fg = fgpid(jobs); //pid for fg process.
+    if(fgpid(jobs)!=0){ //if there is one...
+        Kill(-fg, SIGTSTP); //kill it.
+    }
+    return;
 
 }
 /*********************
  * End signal handlers
  *********************/
-
-
-
-
