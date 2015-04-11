@@ -1,7 +1,7 @@
 # Makefile for the CS:APP Shell Lab
 
 TEAM = NOBODY
-DRIVER = ./sdriver.pl -v 
+DRIVER = ./sdriver.pl
 TSH = ./tsh
 TSHREF = ./tshref
 TSHARGS = "-p"

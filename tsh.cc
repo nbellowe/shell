@@ -223,47 +223,49 @@ int builtin_cmd(char **argv)
 //
 void do_bgfg(char **argv)
 {
-  struct job_t *jobp=NULL;
+    struct job_t *jobp=NULL;
 
-  /* Ignore command if no argument */
-  if (argv[1] == NULL) {
-    printf("%s command requires PID or %%jobid argument\n", argv[0]);
-    return;
-  }
-
-  /* Parse the required PID or %JID arg */
-  if (isdigit(argv[1][0])) {
-    pid_t pid = atoi(argv[1]);
-    if (!(jobp = getjobpid(jobs, pid))) {
-      printf("(%d): No such process\n", pid);
-      return;
+    /* Ignore command if no argument */
+    if (argv[1] == NULL) {
+        printf("%s command requires PID or %%jobid argument\n", argv[0]);
+        return;
     }
-  }
-  else if (argv[1][0] == '%') {
+
+    /* Parse the required PID or %JID arg */
+    if (isdigit(argv[1][0])) {
+        pid_t pid = atoi(argv[1]);
+        if (!(jobp = getjobpid(jobs, pid))) {
+            printf("(%d): No such process\n", pid);
+            return;
+        }
+    }
+    else if (argv[1][0] == '%') {
     int jid = atoi(&argv[1][1]);
     if (!(jobp = getjobjid(jobs, jid))) {
-      printf("%s: No such job\n", argv[1]);
-      return;
+        printf("%s: No such job\n", argv[1]);
+        return;
     }
-  }
-  else {
-    printf("%s: argument must be a PID or %%jobid\n", argv[0]);
+    }
+    else {
+        printf("%s: argument must be a PID or %%jobid\n", argv[0]);
+        return;
+    }
+
+    //BEGIN OUR CODE
+
+    pid_t pid = jobp -> pid;
+    int oldstate = jobp -> state;
+    int newstate = !strcmp(argv[0], "fg") ? FG : BG;
+    jobp -> state = newstate;
+    if(oldstate == ST)//if the job has stopped we need to send a signal
+    {                      //to continue.
+        Kill(-pid, SIGCONT); //kill really sends signal to continue program
+    }
+    if(newstate == FG) //if its a foreground job
+    {
+        waitpid(-pid, NULL, 0); //wait for task to complete because 'fg'
+    }
     return;
-  }
-
-  //BEGIN OUR CODE
-
-  pid_t pid = jobp -> pid;
-  jobp -> state = !strcmp(argv[0], "fg") ? FG : BG; //assign the job its state.
-  if(jobp -> state == ST)//if the job has stopped we need to send a signal
-  {                      //to continue.
-      Kill(-pid, SIGCONT); //kill really sends signal to continue program
-  }
-  if(jobp -> state == FG) //if its a foreground job
-  {
-      waitpid(-pid, NULL, 0); //FG jobs are blocking, and we must wait to prompt
-  }
-  return;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -273,7 +275,7 @@ void do_bgfg(char **argv)
 void waitfg(pid_t pid)
 {
     while(fgpid(jobs)==pid){   //spin while the inputted pid is still the fg pid
-      sleep(.1);   //blocking call to sleep.
+      Sleep(100);   //blocking call to sleep.
     }
     return;
 }
@@ -336,7 +338,8 @@ void sigtstp_handler(int sig)
 
     pid_t fg = fgpid(jobs); //pid for fg process.
     if(fgpid(jobs)!=0){ //if there is one...
-        Kill(-fg, SIGTSTP); //kill it.
+        Kill(-fg, SIGTSTP); //stop it.
+        getjobpid(jobs,fg)->state = ST; //Set state to stopped.
     }
     return;
 
