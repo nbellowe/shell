@@ -28,6 +28,9 @@ tsh: tsh.o jobs.o helper-routines.o
 tests: tsh test01 test02 test03 test04 test05 test06 test07 test08 test09 test10 test11 test12 test13 test14 test15 test16
 	@echo all time
 
+rtests: rtest01 rtest02 rtest03 rtest04 rtest05 rtest06 rtest07 rtest08 rtest09 rtest10 rtest11 rtest12 rtest13 rtest14 rtest15 rtest16
+	@echo all time
+
 
 # Run tests using the student's shell program
 test01:
