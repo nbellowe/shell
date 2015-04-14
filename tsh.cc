@@ -311,6 +311,7 @@ void sigchld_handler(int sig)
 {
     pid_t pid;
     int   CODE;
+    int status;
 
     while (1)
     {
@@ -320,6 +321,7 @@ void sigchld_handler(int sig)
             return;
 
         if (WIFEXITED(CODE) || WIFSIGNALED(CODE))
+            printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(pid), pid, WTERMSIG(status));
             deletejob(jobs, pid);  // Delete job off of job list if finished.
         else if (WIFSTOPPED(CODE)) //But if stopped, just change the state.
             getjobpid(jobs, pid)->state = ST;
