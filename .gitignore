@@ -1,5 +1,10 @@
 tsh
 .*
+myint
+myspin
+mysplit
+mystop
+
 # Object files
 *.o
 *.ko
