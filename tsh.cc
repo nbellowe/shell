@@ -311,7 +311,6 @@ void sigchld_handler(int sig)
 {
     pid_t pid;
     int   CODE;
-    int status;
 
     while (1)
     {
@@ -320,12 +319,13 @@ void sigchld_handler(int sig)
         if (pid <= 0)                                  //Base case when there are no more zombies
             return;
 
-        if (WIFEXITED(CODE) || WIFSIGNALED(CODE))
-            printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(pid), pid, WTERMSIG(status));
+        if (WIFEXITED(CODE) || WIFSIGNALED(CODE)){
+            printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(pid), pid, WTERMSIG(CODE));
             deletejob(jobs, pid);  // Delete job off of job list if finished.
-        else if (WIFSTOPPED(CODE)) //But if stopped, just change the state.
+        }else if (WIFSTOPPED(CODE)){ //But if stopped, just change the state.
+            printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, WSTOPSIG(CODE));
             getjobpid(jobs, pid)->state = ST;
-        else
+        }else
             printf("SIGCHLD encountered unknown error.");
     }
 }
