@@ -351,6 +351,8 @@ void do_bgfg(char **argv)
     kill(-pid, SIGCONT);      //kill sends signal to continue program
     if (jobp->state == FG)    //if its a foreground job
         waitfg(pid);          //wait for task to complete because 'fg'
+    else
+        printf("[%d] (%d) %s",jobp -> jid, jobp -> pid, jobp->cmdline);
 }
 
 
