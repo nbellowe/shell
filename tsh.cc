@@ -189,7 +189,7 @@ void eval(char *cmdline)
     if ((pid = Fork()) == 0)                    //Therefore, fork a child program.
     {                                           // Fork() returns 0 and enters this block if it is the child.
         Sigprocmask(SIG_UNBLOCK, &mask, 0);     //unblock in child (but not parent until job is added)
-        setpgid(0, 0);                          // assign to new pgid so Signals don't kill shell?
+        Setpgid(0, 0);                          // assign to new pgid so Signals don't kill shell?
         //Sarah I don't understand this pgid. Lets talk about it before the meeting.
         Execve(argv[0], argv, NULL);
         return;                                 //don't want child process becoming a shell! :)
