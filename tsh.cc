@@ -176,19 +176,21 @@ void eval(char *cmdline)
     {
         return;   /* ignore empty lines */
     }
+
+    if (builtin_cmd(argv)) // Handle if the first arg is quit/fg/bg/jobs
+        return;
+
     sigset_t mask;
     Sigemptyset(&mask);              //mask sigchild signal until after job is
     Sigaddset(&mask, SIGCHLD);       //added so as to not delete non-existent
     Sigprocmask(SIG_BLOCK, &mask, 0);
 
-    if (builtin_cmd(argv)) // Handle if the first arg is quit/fg/bg/jobs
-        return;
-
     //if the first word is not a builtin command, it must be a program.
     if ((pid = Fork()) == 0)                    //Therefore, fork a child program.
     {                                           // Fork() returns 0 and enters this block if it is the child.
+        Sigprocmask(SIG_UNBLOCK, &mask, 0);     //unblock in child (but not parent until job is added)
         setpgid(0, 0);                          // assign to new pgid so Signals don't kill shell?
- //Sarah I don't understand this pgid. Lets talk about it before the meeting.
+        //Sarah I don't understand this pgid. Lets talk about it before the meeting.
         Execve(argv[0], argv, NULL);
         return;                                 //don't want child process becoming a shell! :)
     }
@@ -196,6 +198,8 @@ void eval(char *cmdline)
     Sigprocmask(SIG_UNBLOCK, &mask, 0);         //after job is added unblock SIGCHLD
     if (!bg)                                    //If its a foreground task
         waitfg(pid);                            //Foreground tasks need to wait until they are finished.
+    else
+        printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
 }
 
 
@@ -209,22 +213,16 @@ void eval(char *cmdline)
 //
 int builtin_cmd(char **argv)
 {
-    if (!strcmp(argv[0], "quit")) // if the input is 'quit'
-    {
-        sigchld_handler(0);       //good idea to kill child processes.
-        exit(0);                  //exit shell
-    }
-    if (!strcmp(argv[0], "jobs")) // if its jobs
-    {
-        listjobs(jobs);           //list running jobs.
-        return 1;
-    }
-    if (!strcmp(argv[0], "fg") || !strcmp(argv[0], "bg")) //if its 'fg' or 'bg'
-    {
+    if (!strcmp(argv[0], "quit"))                              // if the input is 'quit'
+        exit(0);                                               //exit shell
+    else if (!strcmp(argv[0], "jobs"))                         // if its jobs
+        listjobs(jobs);                                        //list running jobs.
+    else if (!strcmp(argv[0], "fg") || !strcmp(argv[0], "bg")) //if its 'fg' or 'bg'
         do_bgfg(argv);
-        return 1;
-    }
-    return 0;     /* not a builtin command */
+    else
+        return 0;/* not a builtin command */
+
+    return 1;
 }
 
 
@@ -273,12 +271,9 @@ void do_bgfg(char **argv)
     pid_t pid = jobp->pid;
     jobp->state = !strcmp(argv[0], "fg") ? FG : BG;
     //if the job has stopped we need to send a signal to continue.
-    kill(-pid, SIGCONT);        //kill sends signal to continue program
-    if (jobp->state == FG)      //if its a foreground job
-    {
-        waitpid(-pid, NULL, 0); //wait for task to complete because 'fg'
-        deletejob(jobs, pid);   //fixes leftover jobs.
-    }
+    kill(-pid, SIGCONT);      //kill sends signal to continue program
+    if (jobp->state == FG)    //if its a foreground job
+        waitfg(pid);          //wait for task to complete because 'fg'
 }
 
 
@@ -319,14 +314,18 @@ void sigchld_handler(int sig)
         if (pid <= 0)                                  //Base case when there are no more zombies
             return;
 
-        if (WIFEXITED(CODE) || WIFSIGNALED(CODE)){
+        if (WIFEXITED(CODE))
+            deletejob(jobs, pid);   // Delete job off of job list if finished.
+        else if (WIFSIGNALED(CODE)) //If killed
+        {
             printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(pid), pid, WTERMSIG(CODE));
-            deletejob(jobs, pid);  // Delete job off of job list if finished.
-        }else if (WIFSTOPPED(CODE)){ //But if stopped, just change the state.
-            printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, WSTOPSIG(CODE));
+            deletejob(jobs, pid); // Delete job off of job list if finished.
+        }
+        if (WIFSTOPPED(CODE))     //If stopped, change the state.
+        {
             getjobpid(jobs, pid)->state = ST;
-        }else
-            printf("SIGCHLD encountered unknown error.");
+            printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, WSTOPSIG(CODE));
+        }
     }
 }
 
@@ -357,10 +356,7 @@ void sigtstp_handler(int sig)
     pid_t fg = fgpid(jobs);
 
     if (fg != 0)
-    {                                    //if there is pid for fg job
         kill(-fg, SIGTSTP);              //Actually stop it.
-        getjobpid(jobs, fg)->state = ST; //And change our job state to stopped.
-    }
 }
 
 
