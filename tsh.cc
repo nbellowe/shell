@@ -253,7 +253,7 @@ void eval(char *cmdline)
         return;
 
     if( access( argv[0], F_OK ) == -1 ){ //if the file in arg[0] doesn't exists
-        printf("\n: No such file or directory\n");
+        printf("%s: Command not found\n", argv[0]);
         return;
     }
 
