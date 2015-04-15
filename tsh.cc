@@ -23,7 +23,79 @@ using namespace std;
 //
 // Needed global variable definitions
 //
+pid_t Fork(void)
+{
+    pid_t pid;
 
+    if ((pid = fork()) < 0)
+	unix_error("Fork error");
+    return pid;
+}
+
+void Execve(const char *filename, char *const argv[], char *const envp[])
+{
+    if (execve(filename, argv, envp) < 0)
+	unix_error("Command not found: " + *filename);
+}
+
+pid_t Waitpid(pid_t pid, int *iptr, int options)
+{
+    pid_t retpid;
+
+    if ((retpid  = waitpid(pid, iptr, options)) < 0)
+	unix_error("Waitpid error");
+    return(retpid);
+}
+
+void Kill(pid_t pid, int signum)
+{
+    int rc;
+
+    if ((rc = kill(pid, signum)) < 0)
+	unix_error("Kill error");
+}
+
+unsigned int Sleep(unsigned int secs)
+{
+    unsigned int rc;
+
+    if ((rc = sleep(secs)) < 0)
+	unix_error("Sleep error");
+    return rc;
+}
+
+void Setpgid(pid_t pid, pid_t pgid) {
+    int rc;
+
+    if ((rc = setpgid(pid, pgid)) < 0)
+	unix_error("Setpgid error");
+    return;
+}
+
+/************************************
+ * Wrappers for Unix signal functions
+ ***********************************/
+
+void Sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
+{
+    if (sigprocmask(how, set, oldset) < 0)
+	unix_error("Sigprocmask error");
+    return;
+}
+
+void Sigemptyset(sigset_t *set)
+{
+    if (sigemptyset(set) < 0)
+	unix_error("Sigemptyset error");
+    return;
+}
+
+void Sigaddset(sigset_t *set, int signum)
+{
+    if (sigaddset(set, signum) < 0)
+	unix_error("Sigaddset error");
+    return;
+}
 static char prompt[] = "tsh> ";
 int         verbose  = 0;
 
@@ -180,6 +252,11 @@ void eval(char *cmdline)
     if (builtin_cmd(argv)) // Handle if the first arg is quit/fg/bg/jobs
         return;
 
+    if( access( argv[0], F_OK ) == -1 ){ //if the file in arg[0] doesn't exists
+        printf("\n: No such file or directory\n");
+        return;
+    }
+
     sigset_t mask;
     Sigemptyset(&mask);              //mask sigchild signal until after job is
     Sigaddset(&mask, SIGCHLD);       //added so as to not delete non-existent
@@ -189,7 +266,7 @@ void eval(char *cmdline)
     if ((pid = Fork()) == 0)                    //Therefore, fork a child program.
     {                                           // Fork() returns 0 and enters this block if it is the child.
         Sigprocmask(SIG_UNBLOCK, &mask, 0);     //unblock in child (but not parent until job is added)
-        Setpgid(0, 0);                          // assign to new pgid so Signals don't kill shell?
+        setpgid(0, 0);                          // assign to new pgid so Signals don't kill shell?
         //Sarah I don't understand this pgid. Lets talk about it before the meeting.
         Execve(argv[0], argv, NULL);
         return;                                 //don't want child process becoming a shell! :)
