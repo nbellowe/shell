@@ -92,7 +92,8 @@ int main(int argc, char **argv)
     //
     // This one provides a clean way to kill the shell
     //
-    Signal(SIGQUIT, sigquit_handler);
+    
+    Signal(SIGQUIT, sigquit_handler); //ctrl-d, kills shell and all its children
 
     //
     // Initialize the job list
@@ -109,7 +110,7 @@ int main(int argc, char **argv)
         //
         if (emit_prompt)
         {
-            printf("%s", prompt);
+            printf("%s", prompt); //tsh>
             fflush(stdout);
         }
 
@@ -314,6 +315,8 @@ void sigchld_handler(int sig)
     while (1)
     {
         //get zombies -- nohang & untraced
+	//WNOHANG: don't wait for the children's process to finish
+	//WUNTRACED: 
         pid = waitpid(-1, &CODE, WNOHANG | WUNTRACED);
         if (pid <= 0)                                  //Base case when there are no more zombies
             return;
@@ -340,7 +343,7 @@ void sigchld_handler(int sig)
 //    user types ctrl-c at the keyboard.  Catch it and send it along
 //    to the foreground job.
 //
-void sigint_handler(int sig)
+void sigint_handler(int sig) //ctrl-c
 {
     pid_t fg = fgpid(jobs);
 
