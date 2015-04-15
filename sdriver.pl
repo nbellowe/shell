@@ -107,14 +107,6 @@ if ($grade) {
 while (<INFILE>) {
     $line = $_;
     chomp($line);
-    if($line =~ /^.\//){
-      use Cwd qw();
-      my $path = Cwd::cwd();
-      $line =~ s/^.\//$path\//;
-      if($verbose){
-        print "line is expanded to $line\n";
-      }
-    }
 
     # Comment line
     if ($line =~ /^#/) {  
